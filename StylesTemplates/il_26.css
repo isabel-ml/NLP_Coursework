@@ -130,8 +130,8 @@ div#TOC {
   background: #E9F2EC;
   padding-right: 2px;  /* Fixed typo (was missing 'px') */
   padding-left: 2px;
-  width: 17%;  /* Reduces width by 10% (from original 100%) */
-  max-width: 17%; /* Ensures it doesn't exceed 90% of parent */
+  width: 15%;  /* Reduces width by 10% (from original 100%) */
+  max-width: 15%; /* Ensures it doesn't exceed 90% of parent */
 }
 
 
