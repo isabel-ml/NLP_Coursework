@@ -1703,28 +1703,158 @@ border-radius: 0px;
 
 <h1 class="title toc-ignore">Cheat Sheet</h1>
 <h4 class="author">Isabel Leiva</h4>
-<h4 class="date">January 2026</h4>
+<h4 class="date">February 2026</h4>
 
 </div>
 
 
-<div id="favorite-functions" class="section level1">
-<h1>Favorite Functions</h1>
-<p>Functions, arguments, and their uses</p>
-<pre class="r"><code>#base::c()
-mary_sentence &lt;- c(&quot;mary had a little lamb&quot;) #combines values into a single vector
+<div id="coding-cheat-sheet" class="section level1">
+<h1>Coding Cheat Sheet</h1>
+<p>Functions, arguments, techniques, and their uses. Organized by
+package they are contained in.</p>
+<div id="base-r" class="section level2">
+<h2>Base R</h2>
+<pre class="r"><code>#c()
+mary_sentence &lt;- c(&quot;MARY HAD A LITTLE LAMB&quot;) #combines values into a single vector
 
-#tidyverse::tibble()
-mary_df &lt;- tibble(mary_sentence) #creates a &quot;smart&quot; dataframe that works well with knitting
+#tolower
+mary_sentence &lt;- tolower(mary_sentence) #makes all lower case, but also turns back into a vector
 
-#base::gsub()
-mary_df$mary_sentence &lt;- gsub(&quot;mary&quot;, &quot;Mary&quot;,mary_df$mary_sentence) #allows you to substitute a value with something else
+#data.frame()
+mary_df &lt;- data.frame(mary_sentence) #creates a dataframe. columns may be of differing types (numeric, logical, factor, and character).
 
-#dplyr::mutate()
-mary_df &lt;- mary_df %&gt;% mutate(sentence = mary_sentence) #create, modify, and delete columns
+#gsub()
+gsub(&quot;mary&quot;, &quot;Mary&quot;,mary_df$mary_sentence) #allows you to substitute a value with something else</code></pre>
+<pre><code>## [1] &quot;Mary had a little lamb&quot;</code></pre>
+<pre class="r"><code>#data
+data(stop_words) #used to load datasets that come pre-installed with R packages or datasets that have been explicitly installed into your R environment. &quot;stop_words&quot; come from the tidytext dataset
 
-#tidytext::unnest_tokens()
-mary_df &lt;- mary_df %&gt;% unnest_tokens(word, sentence) #Splits a column into tokens, flattening the table into one-token-per-row</code></pre>
+#indexing
+mary_df[1,] # allows you to specify columns and rows by number [row,column]. Colons indicates &quot;through&quot; (e.g 1 through 3)</code></pre>
+<pre><code>## [1] &quot;mary had a little lamb&quot;</code></pre>
+</div>
+<div id="tidytext" class="section level2">
+<h2>tidytext</h2>
+<pre class="r"><code>#unnest_tokens()
+mary_unnested &lt;- mary_df %&gt;% unnest_tokens(word, mary_sentence) #Splits a column into tokens, flattening the table into one-token-per-row</code></pre>
+</div>
+<div id="dplyr" class="section level2">
+<h2>dplyr</h2>
+<pre class="r"><code>#mutate()
+mary_df %&gt;% mutate(sentence = mary_sentence) #create, modify, and delete columns</code></pre>
+<table class="table lightable-paper lightable-striped" style="margin-left: auto; margin-right: auto; font-size: 12px; font-family: Blippo; margin-left: auto; margin-right: auto;">
+<thead>
+<tr>
+<th style="text-align:left;position: sticky; top:0; background-color: #FFFFFF;font-weight: bold;color: white !important;background-color: rgba(157, 194, 161, 255) !important;font-size: 12px;">
+mary_sentence
+</th>
+<th style="text-align:left;position: sticky; top:0; background-color: #FFFFFF;font-weight: bold;color: white !important;background-color: rgba(157, 194, 161, 255) !important;font-size: 12px;">
+sentence
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left;">
+mary had a little lamb
+</td>
+<td style="text-align:left;">
+mary had a little lamb
+</td>
+</tr>
+</tbody>
+</table>
+<pre class="r"><code>#anti_join
+mary_unnested %&gt;% anti_join(stop_words) #compares one dataframe to another and removes words that match </code></pre>
+<table class="table lightable-paper lightable-striped" style="margin-left: auto; margin-right: auto; font-size: 12px; font-family: Blippo; margin-left: auto; margin-right: auto;">
+<thead>
+<tr>
+<th style="text-align:left;position: sticky; top:0; background-color: #FFFFFF;font-weight: bold;color: white !important;background-color: rgba(157, 194, 161, 255) !important;font-size: 12px;">
+x
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left;">
+mary
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+lamb
+</td>
+</tr>
+</tbody>
+</table>
+<pre class="r"><code>#count
+mary_unnested %&gt;% count(word, sort = TRUE) #counts unique words in df</code></pre>
+<table class="table lightable-paper lightable-striped" style="margin-left: auto; margin-right: auto; font-size: 12px; font-family: Blippo; margin-left: auto; margin-right: auto;">
+<thead>
+<tr>
+<th style="text-align:left;position: sticky; top:0; background-color: #FFFFFF;font-weight: bold;color: white !important;background-color: rgba(157, 194, 161, 255) !important;font-size: 12px;">
+word
+</th>
+<th style="text-align:left;position: sticky; top:0; background-color: #FFFFFF;font-weight: bold;color: white !important;background-color: rgba(157, 194, 161, 255) !important;font-size: 12px;">
+n
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left;">
+a
+</td>
+<td style="text-align:left;">
+1
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+had
+</td>
+<td style="text-align:left;">
+1
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+lamb
+</td>
+<td style="text-align:left;">
+1
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+little
+</td>
+<td style="text-align:left;">
+1
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+mary
+</td>
+<td style="text-align:left;">
+1
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div id="textstem" class="section level2">
+<h2>textstem</h2>
+<pre class="r"><code>#lemmatize_strings
+textstem::lemmatize_strings(mary_sentence) #lemmatizes text</code></pre>
+<pre><code>## [1] &quot;mary have a little lamb&quot;</code></pre>
+</div>
+<div id="tidyverse" class="section level2">
+<h2>tidyverse</h2>
+<pre class="r"><code>#tibble()
+mary_df &lt;- tibble(mary_sentence) #creates a &quot;smart&quot; dataframe that works well with knitting</code></pre>
+</div>
 </div>
 
 
