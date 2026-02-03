@@ -1,0 +1,139 @@
+---
+title: "Homework 3"
+author: "Isabel Leiva"
+date: "`r format(Sys.Date(), '%B %Y')`"
+output:
+  html_document:
+    code_folding: show
+    toc: true
+    toc_float: true
+    toc_depth: 2
+    css: !expr here::here("../StylesTemplates/il_26.css")
+---
+```{r Libraries, include = F}
+#wipe R's memory
+rm(list=ls())
+
+#condensed way of writing library(xyz package)
+isa_packages <- c("plyr", "dplyr", "tidyr", "rlang", "readr", "ggplot2", "GGally",  
+              "skimr", "lme4", "lmerTest", "effects", "reshape", "reshape2",
+              "psych", "tidyverse", "modelsummary", "lme4", "sjPlot", "rstatix",
+              "glmnet", "apaTables","umx", "ltm","effectsize","emmeans","ggeffects",
+              "MuMIn","stats", "here", "kableExtra", "RCurl",  "knitr", "RColorBrewer",
+              'gutenbergr', 'janeaustenr',"tidytext","xfun","tm", "stringi")
+
+packages <- rownames(installed.packages())
+p_to_install <- isa_packages[!(isa_packages %in% packages)]
+
+if(length(p_to_install) > 0){
+  install.packages(p_to_install)
+}
+
+lapply(isa_packages, library, character.only = TRUE)
+```
+
+```{r knitr_setup, include=F}
+knitr::opts_chunk$set(fig.width=8, fig.height=5, fig.align = 'left', fig.path='Figs/', cache.path='Cache/', eval=T, echo=T, tidy=TRUE,  cache=F, message=F, warning=F, stringsAsFactors=F, yaml.eval.expr = TRUE)  
+
+jamie.theme <- theme_bw() + theme(axis.line = element_line(colour = "black"), panel.grid.minor = element_blank(), panel.grid.major = element_blank(), panel.border = element_blank(), panel.background = element_blank(), legend.title= element_blank())  #custom theme ggplot2
+
+#prints the knitted output with these specifications
+print.me <- function(x, ...) {
+if (nrow(x) > 200){
+   len <- 200 
+    } else {
+       len <- (nrow(x))
+}
+   x[1:len,] %>%
+   kbl(digits=2, align= 'l', booktabs=T) %>%
+   kable_styling(fixed_thead = T) %>%
+   kable_paper("striped", full_width = T, html_font = "Blippo", font_size = 12) %>%
+   row_spec(0, color = "white", background = "#9DC2A1", font_size = 12, bold = TRUE) %>%
+   #scroll_box(width = "700px", height = "500px") %>%
+   asis_output()
+}
+
+registerS3method("knit_print", "data.frame", print.me)
+#to_R <- read.csv(here("data", "MyRaw.txt")) ---- using 'here' to read in data
+```
+
+# Homework: Creating a "Cleaning Genie" function
+1. Remove punctuation
+2. Remove numbers
+3. Remove "stop words"
+4. Lengthen contractions
+4. Convert to lower case
+5. Remove blank space
+6. Split and unlist
+7. Remove single characters 
+
+## Loading data
+```{r}
+load("data/MIT_stops.rda") #MIT stop words
+load("data/replacements_25.rda") # contraction replacements
+load("data/SMART_stops.rda") #smart stop words
+load("data/Temple_stops25.rda") #temple stop words
+unabomb <- paste(readLines('https://raw.githubusercontent.com/Reilly-ConceptsCognitionLab/reillylab_publicdata/main/unabomber_manifesto.txt')) #unabomber manifesto
+cat(unabomb[1:10], sep = "\n") #Print first few lines of unabomber manifesto
+```
+
+## Creating functions to streamline the genie
+```{r}
+# Function to replace a word in a target data frame with a replacement word
+replace_words <- function(text, replacements_25) {
+ # Replace each bad word with its corresponding good word
+ for (i in seq_len(nrow(replacements_25))) {
+   text <- gsub(
+     pattern = replacements_25$word[i],
+     replacement = replacements_25$replacement[i],
+     x = text,
+     ignore.case = TRUE
+   )
+ }
+ return(text)
+}
+#note: this ONLY works if the apostrophe's are the same font the apostrophe that my computer creates " ' " is not recognized as matching the apostrophe's on the replacements_25 list, which look like this " ’ ". We may want to discuss that?
+
+```
+
+## Cleaning Genie Function
+```{r}
+#Cleaning Genie function
+cleaning_genie <- function(x){ #stating the function
+   y <- tolower(x) #makes all lower case
+   y <- replace_words(y, replacements_25) #replaces contractions with full words
+   y <- gsub('[[:punct:]]',' ', y) #removing all punctuation
+   y <- gsub("\\b[a-zA-Z]\\b{1}", " ", y) #omits singletons including Aa and Ii
+   y <- textstem::lemmatize_strings(y) #lemmatizes text
+   y <- gsub('[0-9]+',' ', y) #removing all numbers
+   y <- tibble(y) #making into a dataframe for the final piece!
+   y <- y %>% unnest_tokens(word, y)  # one word per rows, removing blank spaces, and making all lowercase
+   y <- y %>% anti_join(SMART_stops) #removing stop words by line
+   return(y) #final step of the function
+}
+
+```
+
+## Deploy Genie! 
+```{r}
+unabomb_clean <- cleaning_genie(unabomb) #using the function on unabomber manifesto and saving as new df
+unabomb_clean[1:20,] #printing the first 20 lines of the df
+```
+
+# Optional Homework (mentioned in class)
+1. Make a Document Feature Matrix (DFM) for pride and prejudice
+
+## Pride & prejudice DFM
+```{r}
+pride_prej <- readLines('data/PridePrejudice.txt')
+pride_prej <- data.frame(full_text = pride_prej)
+data(stop_words)
+pride_prej_clean <- pride_prej %>% #piping through the "pride_prej" df and storing changes in a new df called "sticks_clean"
+  mutate(full_text = gsub(pattern = '[[:punct:]]',replacement ='', full_text)) %>% #using mutate to overwrite the "pride_prej" "full_text" col and using gsub to remove all punctuation
+  mutate(full_text = gsub(pattern = '[0-9]+',replacement ='', full_text)) %>% #using mutate to overwrite the "pride_prej" "full_text" col and using gsub to remove all numbers
+  unnest_tokens(word, full_text) %>% # separating the words into individual rows, removing blank spaces, and making all lowercase
+  anti_join(stop_words) #removing stop words
+pride_prej_count <- pride_prej_clean %>% count(word, sort = TRUE) #identifying unique words in df and counting total using "length"
+pride_prej_count[1:20,] #printing the first 20 most used words
+```
+
