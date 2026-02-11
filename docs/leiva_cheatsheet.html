@@ -1711,10 +1711,13 @@ border-radius: 0px;
 <div id="coding-cheat-sheet" class="section level1">
 <h1>Coding Cheat Sheet</h1>
 <p>Functions, arguments, techniques, and their uses. Organized by
-package they are contained in.</p>
+package they are contained in. <br></p>
 <div id="base-r" class="section level2">
-<h2>Base R</h2>
-<pre class="r"><code>#c()
+<h2>Base R <br></h2>
+<pre class="r"><code>#help()
+help(&quot;function&quot;) #run help in console to get detailed information in bottom right pane
+
+#c()
 mary_sentence &lt;- c(&quot;MARY HAD A LITTLE LAMB&quot;) #combines values into a single vector
 
 #tolower
@@ -1734,12 +1737,12 @@ mary_df[1,] # allows you to specify columns and rows by number [row,column]. Col
 <pre><code>## [1] &quot;mary had a little lamb&quot;</code></pre>
 </div>
 <div id="tidytext" class="section level2">
-<h2>tidytext</h2>
+<h2>tidytext <br></h2>
 <pre class="r"><code>#unnest_tokens()
 mary_unnested &lt;- mary_df %&gt;% unnest_tokens(word, mary_sentence) #Splits a column into tokens, flattening the table into one-token-per-row</code></pre>
 </div>
 <div id="dplyr" class="section level2">
-<h2>dplyr</h2>
+<h2>dplyr <br></h2>
 <pre class="r"><code>#mutate()
 mary_df %&gt;% mutate(sentence = mary_sentence) #create, modify, and delete columns</code></pre>
 <table class="table lightable-paper lightable-striped" style="margin-left: auto; margin-right: auto; font-size: 12px; font-family: Blippo; margin-left: auto; margin-right: auto;">
@@ -1845,15 +1848,57 @@ mary
 </table>
 </div>
 <div id="textstem" class="section level2">
-<h2>textstem</h2>
+<h2>textstem <br></h2>
 <pre class="r"><code>#lemmatize_strings
 textstem::lemmatize_strings(mary_sentence) #lemmatizes text</code></pre>
 <pre><code>## [1] &quot;mary have a little lamb&quot;</code></pre>
 </div>
 <div id="tidyverse" class="section level2">
-<h2>tidyverse</h2>
+<h2>tidyverse <br></h2>
 <pre class="r"><code>#tibble()
 mary_df &lt;- tibble(mary_sentence) #creates a &quot;smart&quot; dataframe that works well with knitting</code></pre>
+</div>
+<div id="quanteda" class="section level2">
+<h2>quanteda <br></h2>
+<pre class="r"><code># corpus()
+mary_corpus &lt;- mary_df %&gt;% 
+  mutate(sentence = mary_sentence) %&gt;% #create, modify, and delete columns
+  quanteda::corpus(text_field = &quot;sentence&quot;) #using the quanteda::corpus() function to convert df into a corpus. The argument text_field() tells quanteda which column of the df to summarize as a corpus.
+
+# tokens()
+mary_token &lt;- quanteda::tokens(mary_corpus, remove_punct = TRUE) #Creates a tokenized version of the corpus or df
+
+# textstat_lexdiv()
+textstat_lexdiv(mary_token, measure = c(&quot;TTR&quot;), log.base = 10) #lexical diversity, can take a dfm, corpus or token</code></pre>
+<table class="table lightable-paper lightable-striped" style="margin-left: auto; margin-right: auto; font-size: 12px; font-family: Blippo; margin-left: auto; margin-right: auto;">
+<thead>
+<tr>
+<th style="text-align:left;position: sticky; top:0; background-color: #FFFFFF;font-weight: bold;color: white !important;background-color: rgba(157, 194, 161, 255) !important;font-size: 12px;">
+document
+</th>
+<th style="text-align:left;position: sticky; top:0; background-color: #FFFFFF;font-weight: bold;color: white !important;background-color: rgba(157, 194, 161, 255) !important;font-size: 12px;">
+TTR
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left;">
+text1
+</td>
+<td style="text-align:left;">
+1
+</td>
+</tr>
+</tbody>
+</table>
+<pre class="r"><code>#dfm()
+mary_dfm &lt;- dfm(mary_token) # Create a document-feature matrix
+
+# selecting the top features from the dfm
+topfeatures(mary_dfm, 5) #top 5 most used words </code></pre>
+<pre><code>##   mary    had      a little   lamb 
+##      1      1      1      1      1</code></pre>
 </div>
 </div>
 
