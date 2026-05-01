@@ -1,0 +1,237 @@
+---
+title: "Harry Potter and the Art of Fanfiction: Analyses"
+author: "Isabel Leiva"
+date: "`r format(Sys.Date(), '%B %Y')`"
+output:
+  html_document:
+    code_folding: show
+    toc: true
+    toc_float: true
+    toc_depth: 2
+    css: !expr here::here("../StylesTemplates/il_hp_26.css")
+---
+```{r Libraries, include = F}
+#wipe R's memory
+rm(list=ls())
+
+#condensed way of writing library(xyz package)
+isa_packages <- c("plyr", "dplyr", "tidyr", "rlang", "readr", "ggplot2", "GGally",  
+              "skimr", "lme4", "lmerTest", "effects", "reshape", "reshape2",
+              "psych", "tidyverse", "modelsummary", "lme4", "sjPlot", "rstatix",
+              "glmnet", "apaTables","umx", "ltm","effectsize","emmeans","ggeffects",
+              "MuMIn","stats", "here", "kableExtra", "RCurl",  "knitr", "RColorBrewer",
+              'gutenbergr', 'janeaustenr',"tidytext","xfun","tm", "stringr", "stringi", 
+              "quanteda", "quanteda.textplots", "textstem","quanteda.textstats",
+              "textclean", "readtext", "udpipe", "harrypotter", "praise", "devtools")
+
+packages <- rownames(installed.packages())
+p_to_install <- isa_packages[!(isa_packages %in% packages)]
+
+if(length(p_to_install) > 0){
+  install.packages(p_to_install)
+}
+
+lapply(isa_packages, library, character.only = TRUE)
+```
+
+```{r knitr_setup, include=F}
+knitr::opts_chunk$set(fig.width=8, fig.height=5, fig.align = 'left', fig.path='Figs/', cache.path='Cache/', eval=T, echo=T, tidy=TRUE,  cache=F, message=F, warning=F, stringsAsFactors=F, yaml.eval.expr = TRUE)  
+
+jamie.theme <- theme_bw() + theme(axis.line = element_line(colour = "black"), panel.grid.minor = element_blank(), panel.grid.major = element_blank(), panel.border = element_blank(), panel.background = element_blank(), legend.title= element_blank())  #custom theme ggplot2
+
+#prints the knitted output with these specifications
+print.me <- function(x, ...) {
+if (nrow(x) > 200){
+   len <- 200 
+    } else {
+       len <- (nrow(x))
+}
+   x[1:len,] %>%
+   kbl(digits=2, align= 'l', booktabs=T) %>%
+   kable_styling(fixed_thead = T) %>%
+   kable_paper("striped", full_width = T, html_font = "Blippo", font_size = 12) %>%
+   row_spec(0, color = "white", background = "#745AAB", font_size = 12, bold = TRUE) %>%
+   #scroll_box(width = "700px", height = "500px") %>%
+   asis_output()
+}
+
+registerS3method("knit_print", "data.frame", print.me)
+#to_R <- read.csv(here("data", "MyRaw.txt")) ---- using 'here' to read in data
+```
+
+# Research Question
+
+It is often said that fanfiction is "darker" thematically compared to the original works they are based off of. Some even go as far as to say that these more explicit themes is what makes the fanfiction themselves original works. However, this begs the question of whether fanfiction is "darker" than the original works in some tangible way. Thankfully, with the advent of natural language processing and semantic analysis, we can finally answer this afe old question: 
+
+Does fanfiction differ significantly in overall negative valence and negative valence over time from the works that it draws from?
+
+We will be testing this using one of the most popular fandoms of the 21st century, Harry Potter.
+
+# Original Analysis
+
+## Dataframe Setup (Valence)
+
+```{r final_clean}
+hp_clean <- read.csv("hp_clean.csv") #read in cleaned harry potter csv to save on cleaning time (took 24 hours!)
+
+hp_analysis <- hp_clean %>% 
+  dplyr::left_join(lookup_small, by = c("word_clean" = "word")) %>% #joining gaslighting stories with the sentiment word ratings
+  dplyr::select(doc_id, genre, author, word_clean, emo_valence_b24_rescale) %>% #selecting columns for analysis
+  drop_na(emo_valence_b24_rescale) #dropping empty columns for analysis
+hp_analysis[1:20,] #printing the first 20 lines of the df
+
+#creating a column to account for differing word counts
+hp_analysis <- hp_analysis %>% 
+  group_by(doc_id) %>%
+  mutate(time_point = seq_along(word_clean),
+         word_count = n())
+hp_analysis[38261:38262,] #printing to make sure its counting correctly
+hp_analysis[1:20,] #printing the first 20 lines of the df
+
+#making the following variables factors
+hp_analysis$doc_id <- as.factor(hp_analysis$doc_id)
+hp_analysis$genre <-  as.factor(hp_analysis$genre)
+hp_analysis$author <-  as.factor(hp_analysis$author)
+
+#quick summary stats
+hp_val_summary <- hp_analysis %>% group_by(genre) %>% dplyr::summarize_at(c("emo_valence_b24_rescale"), list(mean=mean, sd=sd, min = min, max = max), na.rm=T) %>% ungroup() #grouping dataframe by gaslighting endorsement to summarize variables
+print(hp_val_summary) #printing results
+hp_count_summary <- hp_analysis %>% group_by(genre) %>% dplyr::summarize_at(c("word_count"), list(mean=mean, sd=sd, min = min, max = max), na.rm=T) %>% ungroup() #grouping dataframe by gaslighting endorsement to summarize variables
+print(hp_count_summary) #printing results
+```
+
+## Overall Valence
+
+Our first model proves to be null. There is no significant difference in valence between fanfiction and the originals, though it it important to note that in this graph that is plotting marginal effects already we can see a really large confidence interval for the original compared to the fanfiction ~foreshadowing for later~
+
+```{r og_vs_fanfic}
+hp_val <- lmer(emo_valence_b24_rescale ~ genre + word_count + (1|author) + (1|doc_id), data = hp_analysis) #running lmers to test hypotheses
+summary(hp_val) #printing results
+
+#vizualize
+plot_model(hp_val, type = "pred")
+```
+
+## Valence Over Time
+
+Now here is where things get interesting. When accounting for time point in the story, with 1 representing the first word in the piece we can see that there is a significant interaction between genre and time point on valence. In a shocking turn of events though, it appears that the original works are driving this interaction rather than the fanfiction. I went ahead and dug into this by sub-setting the data 
+
+
+```{r genre_timepoint}
+hp_time_val <- lmer(emo_valence_b24_rescale ~ time_point*genre + word_count + (1|author) + (1|doc_id), data = hp_analysis) #running lmers to test hypotheses
+summary(hp_time_val) #printing results
+
+# visualize
+plot_model(hp_time_val, type = "int")
+```
+
+## Valence Over Time (Subset)
+
+We can see that in the original series all of the books trend more negative over time, with the first 3 books having the most dramatic change in valence. The fanfiction on the other hand seems to vary a bit more wildly in valence within group. Most importantly, the fanfictions do NOT seem as a group to trend particularly negative, and in some cases seem to trend quite positively in valence.
+
+```{r individual_analysis}
+og_hp_analysis <- hp_analysis %>% subset(genre == "og")
+og_hp_time_val <- lm(emo_valence_b24_rescale ~ time_point*doc_id + word_count, data = og_hp_analysis) #running lmers to test hypotheses
+summary(og_hp_time_val) #printing results
+plot_model(og_hp_time_val, type = "int") # visualize
+
+fanfic_hp_analysis <- hp_analysis %>% subset(genre == "fanfic")
+fanfic_hp_time_val <- lm(emo_valence_b24_rescale ~ time_point*doc_id + word_count, data = fanfic_hp_analysis) #running lmers to test hypotheses
+summary(fanfic_hp_time_val) #printing results
+my_colors <- c('#e6194b', '#3cb44b', '#ffe119', '#4363d8', '#f58231', '#911eb4', '#46f0f0', '#f032e6', '#bcf60c', '#fabebe', '#008080', '#e6beff', '#9a6324', '#fffac8', '#800000', '#aaffc3', '#808000', '#000075', '#808080', '#000000')
+plot_model(fanfic_hp_time_val, type = "int", colors = my_colors) # visualize
+```
+
+## Valence Conclusions
+
+The data suggest that not only is there no overall difference between the original Harry Potter series and it’s fanfiction, but the original series is generally more negative over the course of the story compared to the fanfiction.
+
+BUT this may be less-so due to the original series being “darker” and more-so because the original series tends to start with lighter themes (Opening feast, Christmas chapters, Weasley time) and end with a final battle or conflict. In addition, Fanfiction may simply be more consistently “dark” over time in a way that valence may not be capturing…
+
+
+# Exploratory Analysis
+
+These additional analyses are supported by my original research question and lit review as well, except rather than using valence to measure the latent variable of “darkness” we are using sadness instead.
+
+## Dataframe Setup (sadness)
+
+```{r final_clean2}
+hp_sad_analysis <- hp_clean %>% 
+  dplyr::left_join(lookup_small, by = c("word_clean" = "word")) %>% #joining gaslighting stories with the sentiment word ratings
+  dplyr::select(doc_id, genre, author, word_clean, emo_sadness_rescale) %>% #selecting columns for analysis
+  drop_na(emo_sadness_rescale) #dropping empty columns for analysis
+hp_sad_analysis[1:20,] #printing the first 20 lines of the df
+
+#creating a column to account for differing word counts
+hp_sad_analysis <- hp_sad_analysis %>% 
+  group_by(doc_id) %>%
+  mutate(time_point = seq_along(word_clean),
+         word_count = n())
+hp_sad_analysis[38678:38679,] #printing to make sure its counting correctly
+hp_sad_analysis[1:20,] #printing the first 20 lines of the df
+
+#making the following variables factors
+hp_sad_analysis$doc_id <- as.factor(hp_sad_analysis$doc_id)
+hp_sad_analysis$genre <-  as.factor(hp_sad_analysis$genre)
+hp_sad_analysis$author <-  as.factor(hp_sad_analysis$author)
+
+#quick summary stats
+hp_sad_summary <- hp_sad_analysis %>% group_by(genre) %>% dplyr::summarize_at(c("emo_sadness_rescale"), list(mean=mean, sd=sd, min = min, max = max), na.rm=T) %>% ungroup() #grouping dataframe by gaslighting endorsement to summarize variables
+print(hp_sad_summary) #printing results
+hp_word_summary <- hp_sad_analysis %>% group_by(genre) %>% dplyr::summarize_at(c("word_count"), list(mean=mean, sd=sd, min = min, max = max), na.rm=T) %>% ungroup() #grouping dataframe by gaslighting endorsement to summarize variables
+print(hp_word_summary) #printing results
+```
+
+
+## Overall Sadness
+
+Like its sibling analysis before it, the overall sadness model proves to be null. There is no significant difference in sadness between fanfiction and the original series and there is again a really large confidence interval for the original compared to the fanfiction.
+
+```{r og_vs_fanfic2}
+hp_sad <- lmer(emo_sadness_rescale ~ genre + word_count + (1|author) + (1|doc_id), data = hp_sad_analysis) #running lmers to test hypotheses
+summary(hp_sad) #printing results
+
+#vizualize
+plot_model(hp_sad, type = "pred")
+```
+
+## Sadness Over Time
+
+Tragically, the results are identical to the valence results but flipped because on the scale of sadness higher scores indicate more sadness.
+
+```{r genre_timepoint2}
+hp_time_sad <- lmer(emo_sadness_rescale ~ time_point*genre + word_count + (1|author) + (1|doc_id), data = hp_sad_analysis) #running lmers to test hypotheses
+summary(hp_time_sad) #printing results
+
+# visualize
+plot_model(hp_time_sad, type = "int")
+```
+
+## Valence Over Time (Subset)
+
+In other words the original series generally becomes more sad over the course of the books and all of the books trend towards sadness, whereas the fanfictions seem to not move much in terms of sadness over the course of the story or become less sad as the story progresses
+
+```{r individual_analysis2}
+og_hp_sad_analysis <- hp_sad_analysis %>% subset(genre == "og")
+og_hp_time_val <- lm(emo_sadness_rescale ~ time_point*doc_id + word_count, data = og_hp_sad_analysis) #running lmers to test hypotheses
+summary(og_hp_time_val) #printing results
+plot_model(og_hp_time_val, type = "int") # visualize
+
+fanfic_hp_sad_analysis <- hp_sad_analysis %>% subset(genre == "fanfic")
+fanfic_hp_time_val <- lm(emo_sadness_rescale ~ time_point*doc_id + word_count, data = fanfic_hp_sad_analysis) #running lmers to test hypotheses
+summary(fanfic_hp_time_val) #printing results
+my_colors <- c('#e6194b', '#3cb44b', '#ffe119', '#4363d8', '#f58231', '#911eb4', '#46f0f0', '#f032e6', '#bcf60c', '#fabebe', '#008080', '#e6beff', '#9a6324', '#fffac8', '#800000', '#aaffc3', '#808000', '#000075', '#808080', '#000000')
+plot_model(fanfic_hp_time_val, type = "int", colors = my_colors) # visualize
+
+```
+
+# Overall Conclusions
+
+My final thoughts based on this analysis are that it looks like fanfiction as a whole is NOT particularly darker than its source material. In fact it seems like they generally maintain the same valence and sadness overtime not moving much throughout the story save for a few outliers.
+
+There are some limitations to my analyses of course:
+1. Data cleaning was messy and many words that got smooshed together ended up needing to be dropped
+2. The analyses assume linearity in storytelling (not accounting for individual high-highs and low-lows)
+3. And perhaps my biggest concern, which is that valence database does not take context into account
+
+Future directions might include semantic embedding analyses and may attempt to select a sample of fanfiction tagged specifically for their more negatively valenced content to better analyze this question and to serve as a proof of concept. In addition, running a smaller dataset analysis comparing a smaller group of fanfictions to the books would likely make these analyses easier to interpret.

@@ -1,0 +1,309 @@
+---
+title: "Harry Potter and the Art of Fanfiction: Data Cleaning"
+author: "Isabel Leiva"
+date: "`r format(Sys.Date(), '%B %Y')`"
+output:
+  html_document:
+    code_folding: show
+    toc: true
+    toc_float: true
+    toc_depth: 2
+    css: !expr here::here("../StylesTemplates/il_hp_26.css")
+---
+```{r Libraries, include = F}
+#wipe R's memory
+rm(list=ls())
+
+#condensed way of writing library(xyz package)
+isa_packages <- c("plyr", "dplyr", "tidyr", "rlang", "readr", "ggplot2", "GGally",  
+              "skimr", "lme4", "lmerTest", "effects", "reshape", "reshape2",
+              "psych", "tidyverse", "modelsummary", "lme4", "sjPlot", "rstatix",
+              "glmnet", "apaTables","umx", "ltm","effectsize","emmeans","ggeffects",
+              "MuMIn","stats", "here", "kableExtra", "RCurl",  "knitr", "RColorBrewer",
+              'gutenbergr', 'janeaustenr',"tidytext","xfun","tm", "stringr", "stringi", 
+              "quanteda", "quanteda.textplots", "textstem","quanteda.textstats",
+              "textclean", "readtext", "udpipe", "harrypotter", "praise", "devtools")
+
+packages <- rownames(installed.packages())
+p_to_install <- isa_packages[!(isa_packages %in% packages)]
+
+if(length(p_to_install) > 0){
+  install.packages(p_to_install)
+}
+
+lapply(isa_packages, library, character.only = TRUE)
+```
+
+```{r knitr_setup, include=F}
+knitr::opts_chunk$set(fig.width=8, fig.height=5, fig.align = 'left', fig.path='Figs/', cache.path='Cache/', eval=T, echo=T, tidy=TRUE,  cache=F, message=F, warning=F, stringsAsFactors=F, yaml.eval.expr = TRUE)  
+
+jamie.theme <- theme_bw() + theme(axis.line = element_line(colour = "black"), panel.grid.minor = element_blank(), panel.grid.major = element_blank(), panel.border = element_blank(), panel.background = element_blank(), legend.title= element_blank())  #custom theme ggplot2
+
+#prints the knitted output with these specifications
+print.me <- function(x, ...) {
+if (nrow(x) > 200){
+   len <- 200 
+    } else {
+       len <- (nrow(x))
+}
+   x[1:len,] %>%
+   kbl(digits=2, align= 'l', booktabs=T) %>%
+   kable_styling(fixed_thead = T) %>%
+   kable_paper("striped", full_width = T, html_font = "Blippo", font_size = 12) %>%
+   row_spec(0, color = "white", background = "#745AAB", font_size = 12, bold = TRUE) %>%
+   #scroll_box(width = "700px", height = "500px") %>%
+   asis_output()
+}
+
+registerS3method("knit_print", "data.frame", print.me)
+#to_R <- read.csv(here("data", "MyRaw.txt")) ---- using 'here' to read in data
+```
+
+# Research Question
+
+It is often said that fanfiction is "darker" thematically compared to the original works they are based off of. Some even go as far as to say that these more explicit themes is what makes the fanfiction themselves original works. However, this begs the question of whether fanfiction is "darker" than the original works in some tangible way. Thankfully, with the advent of natural language processing and semantic analysis, we can finally answer this afe old question: 
+
+Does fanfiction differ significantly in overall negative valence and negative valence over time from the works that it draws from?
+
+We will be testing this using one of the most popular fandoms of the 21st century, Harry Potter.
+
+# Data Preperation
+
+All of the original texts are available in [Bradley Boemke's 'harrypotter' package](https://github.com/bradleyboehmke/harrypotterpackage). <br /> 
+
+Note: there are two 'harrypotter' packages. To snag the correct one, use code snippet: devtools::install_github("bradleyboehmke/harrypotter") <br />
+
+All of the Fanfiction is available on Archive of our own [https://archiveofourown.org/]
+<br />
+
+## Original Harry Potter Cleanup
+
+```{r og_hp_clean}
+#downloading the harry potter novels from the package
+#devtools::install_github("bradleyboehmke/harrypotter")
+data(package = "harrypotter")
+data(philosophers_stone)
+data(chamber_of_secrets)
+data(prisoner_of_azkaban)
+data(goblet_of_fire)
+data(order_of_the_phoenix)
+data(half_blood_prince)
+data(deathly_hallows)
+
+#collapsing the novels into one column and row
+p <- philosophers_stone %>% #write to an object
+  paste(collapse= " ") #collapse character vector
+c <- chamber_of_secrets %>% #write to an object
+  paste(collapse= " ") #collapse character vector
+a <- prisoner_of_azkaban %>% #write to an object
+  paste(collapse= " ") #collapse character vector
+g <- goblet_of_fire %>% #write to an object
+  paste(collapse= " ") #collapse character vector
+o <- order_of_the_phoenix %>% #write to an object
+  paste(collapse= " ") #collapse character vector
+h <- half_blood_prince %>% #write to an object
+  paste(collapse= " ") #collapse character vector
+d <- deathly_hallows %>% #write to an object
+  paste(collapse= " ") #collapse character vector
+
+#creating dataframe with books text
+hp_og <- data.frame(text = rbind(p, c, a, g, o, h, d))
+
+#creating new author, genre, & doc_id
+hp_og <- hp_og %>% 
+  mutate(author = c(1, 1, 1, 1, 1, 1, 1),
+         genre = c("og", "og", "og", "og", "og", "og", "og"),
+         doc_id = c("philosophers_stone", "chamber_of_secrets", "prisoner_of_azkaban", "goblet_of_fire", "order_of_the_phoenix", "half_blood_prince", "deathly_hallows"))
+```
+
+## Harry Potter Fanfic Cleanup
+
+```{r hp_fanfic_clean}
+#creating a df with all IDs
+#Directory containing CSV files
+fic_directory <- "fanfics"
+
+#List of .txt files in the directory
+txt_files <- list.files(path = fic_directory, pattern = "*.txt", full.names = TRUE)
+
+#reading in text files as dataframes
+dataframes <- lapply(txt_files, readtext)
+
+# rbind all dataframes
+hp_fanfic <- do.call(rbind, dataframes)
+
+#creating author column
+hp_fanfic$author <- c(2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 8, 14, 15, 16, 17, 18, 19, 20) #choices and kill your darlings have the same author
+
+#creating genre column
+hp_fanfic$genre <- c("fanfic", "fanfic", "fanfic", "fanfic", "fanfic", "fanfic", "fanfic", "fanfic", "fanfic", "fanfic", "fanfic", "fanfic", "fanfic", "fanfic", "fanfic", "fanfic", "fanfic", "fanfic", "fanfic", "fanfic")
+
+```
+
+## Joining Dataframes
+
+```{r joining_dataframes}
+all_hp <- rbind(hp_og, hp_fanfic)
+all_hp <- all_hp %>% dplyr::select(doc_id, genre, author, text)
+rownames(all_hp) <- NULL
+
+#making the following variables factors
+all_hp$doc_id <- as.factor(all_hp$doc_id)
+all_hp$genre <-  as.factor(all_hp$genre)
+all_hp$author <-  as.factor(all_hp$author)
+
+#confirming variables are now factors
+str(all_hp$doc_id)
+str(all_hp$genre)
+str(all_hp$author)
+```
+
+## Loading & cleaning sentiment database
+
+```{r sentiment_database}
+load(url("https://github.com/Reilly-ConceptsCognitionLab/reillylab_publicdata/blob/main/lookup_Jul25.rda?raw=true"))
+lookup_db <- lookup_Jul25 #renaming dataframe
+colnames(lookup_db)
+lookup_small <- lookup_db %>% dplyr::select(word, emo_valence_b24_rescale,emo_sadness_rescale) #creating database that suites hypotheses being tested
+lookup_small[1:20,] #printing the first 20 lines of the df
+lookup_small[lookup_small$word == "smile",] #checking directionality
+lookup_small[lookup_small$word == "cry",] #checking directionality
+
+```
+
+## Cleaning genie
+
+```{r cleaning_genie, eval=T}
+cleaning_genie <- function(dat, wordcol, omit_stops = TRUE, lemmatize = TRUE) {
+  # Input validation
+  #telling R what column in your dataframe is the text in quotes 'wordcol', this error message checks
+  if (!wordcol %in% names(dat)) {
+    stop(paste("Column", wordcol, "not found in dataframe"))
+  }
+#load stopword and replacement lists from github  
+load(url("https://github.com/Reilly-ConceptsCognitionLab/reillylab_publicdata/blob/main/Temple_stops25.rda?raw=true"))
+load(url("https://github.com/Reilly-ConceptsCognitionLab/reillylab_publicdata/blob/main/replacements_25.rda?raw=true"))
+
+# Creating a working df and standardizing
+  dat_prep <- dat %>% #creating a working df called "dat prep"
+    dplyr::mutate(id_row_orig = factor(seq_len(nrow(dat))), # creating a new row that tracks id number (starting from 1)
+      text_initialsplit = tryCatch(stringi::stri_enc_toutf8(as.character(.[[wordcol]]), #creating new row that standardizes text as UTF8
+                                 is_unknown_8bit = TRUE,
+                                 validate = TRUE), error = function(e) stringi::stri_encode(as.character(.[[wordcol]]), to = "UTF-8")
+      ) %>% tolower()) #makes all text lower case
+
+  # Standardize apostrophes in original text
+  dat_prep <- dat_prep %>% dplyr::mutate(text_initialsplit = ifelse(
+        is.na(text_initialsplit), NA_character_, stringi::stri_replace_all_regex(
+          text_initialsplit,
+          "[\u2018\u2019\u02BC\u201B\uFF07\u0092\u0091\u0060\u00B4\u2032\u2035]",
+          "'"
+        )
+      )
+    )
+
+  # Perform initial split into words (retains contractions)
+  dat_prep <- dat_prep %>% tidyr::separate_rows(text_initialsplit, sep = "[[:space:]]+") %>%
+    dplyr::mutate(
+      text_initialsplit = ifelse(
+        is.na(text_initialsplit) | stringi::stri_isempty(text_initialsplit),
+        NA_character_,
+        text_initialsplit
+      )
+    ) %>%
+    # Remove original column
+    dplyr::select(-all_of(wordcol))
+
+  # Creating clean column (called "word_clean") with actual cleaned text
+  dat_prep <- dat_prep %>%
+    dplyr::mutate(
+      word_clean = text_initialsplit,
+      # Remove non-alphabetic characters except apostrophes
+      word_clean = ifelse(
+        is.na(word_clean),
+        NA_character_,
+        stringi::stri_replace_all_regex(word_clean, "[^a-zA-Z']", " ")
+      ),
+      # Remove whitespace
+      word_clean = ifelse(
+        is.na(word_clean),
+        NA_character_,
+        stringr::str_squish(word_clean)
+      ),
+      word_clean = ifelse(
+        is.na(word_clean),
+        NA_character_,
+        stringi::stri_replace_all_regex(word_clean, "[^a-z']", "")
+      ),
+      word_clean = ifelse(
+        is.na(word_clean),
+        NA_character_,
+        stringi::stri_replace_all_regex(word_clean, "[^[:alnum:]']", "")
+      )
+    )
+
+#Replace words function - this finds contractions and replaces them with their expanded forms from a lookup database. 
+ replace_words <- function(word_clean, replacement_df) {
+ for (i in seq_len(nrow(replacement_df))) {
+   text_vector <- gsub(
+     pattern = replacement_df$word[i],
+     replacement = replacement_df$replacement[i],
+     x = word_clean, ignore.case = TRUE)
+ }
+ return(word_clean)
+ }
+ 
+ #run replace words function on dat_prep
+dat_prep <- replace_words(dat_prep, replacement_df = replacements_25)
+
+  # Perform additional splitting after replacements (keeping NAs)
+  dat_prep <- dat_prep %>%
+    tidyr::separate_rows(word_clean, sep = "[[:space:]]+", convert = TRUE) %>%
+    dplyr::mutate(
+      word_clean = ifelse(
+        is.na(word_clean) | stringi::stri_isempty(word_clean),
+        NA_character_,
+        word_clean
+      ),
+      id_row_postsplit = seq_len(dplyr::n())
+    )
+
+  # Lemmatization if requested (only for non-NA values)
+  if (lemmatize) {
+    dat_prep <- dat_prep %>%
+      dplyr::mutate(
+        word_clean = ifelse(
+          is.na(word_clean),
+          NA_character_,
+          textstem::lemmatize_strings(word_clean)
+        )
+      )
+  }
+
+  # Stopword removal if requested (now keeps NAs)
+  if (omit_stops) {
+    stopwords <- tolower(Temple_stops25$word)
+    dat_prep <- dat_prep %>%
+      dplyr::mutate(
+        is_stopword = ifelse(
+          is.na(word_clean),
+          NA,
+          word_clean %in% stopwords
+        ),
+        word_clean = ifelse(is_stopword, NA_character_, word_clean)
+      ) %>%
+      dplyr::select(-is_stopword)  # Remove the is_stopword column
+  }
+
+  return(dat_prep)
+}
+
+```
+
+## Deploy Genie
+
+```{r using_genie, eval=F}
+hp_clean <- cleaning_genie(all_hp, 'text')
+
+write.csv(hp_clean, file = "hp_clean.csv")
+```
